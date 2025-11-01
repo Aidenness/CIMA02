@@ -1,0 +1,24 @@
+/***** TinyMCE preview styles *****/
+
+.tiny-template-layout {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.tiny-template-column {
+    flex: 1;
+    padding: 10px;
+    min-height: 100px;
+    max-width: 50%;
+}
+
+@media screen and (max-width: 768px) {
+    .tiny-template-layout {
+        flex-direction: column;
+    }
+
+    .tiny-template-column {
+        max-width: 100%;
+    }
+}

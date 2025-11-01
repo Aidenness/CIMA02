@@ -1,0 +1,1047 @@
+// load_grading_interactions
+var grading_temp_value = false;
+var grading_full_screen = false;
+var no_grading_value = '<i class="icnColor edit"></i>';
+
+var missing;
+var absent;
+var incomplete;
+var excused;
+
+function load_grading_interactions(options) {
+	missing = options.missing;
+	absent = options.absent;
+	incomplete = options.incomplete;
+	excused = options.excused;
+
+	if (options.fullscreen == 'true') {
+		grading_full_screen = true;
+		grading_switch_to_full_window();
+	}
+
+	load_grading_effect(options);
+	load_grading_click_events();
+	load_grading_input_events(options);
+	load_grading_click_event_for_adjustments(options);
+
+	if (options.rubric == true) {
+		//load_grading_rubric_icon_click_event(options);
+		//load_grading_click_event_with_rubric(options);
+	} else if (options.grademap == true && options.rubric == false) {
+		load_grading_grademap_dropdown();
+	}
+}
+
+function load_grading_interactions_show_only(options) {
+	if (options.fullscreen == 'true') {
+		grading_full_screen = true;
+		grading_switch_to_full_window();
+	}
+}
+
+function load_grading_effect(options) {
+	$(document).on('click', function(e) {
+		if ($(e.target).parents('.grade-marker').length > 0) {
+			if (options.rubric == true) {
+				$.facebox({ajax: '/' + options.controller + '/grade_with_rubric/' + options.assignment_id + '?student=' + options.student_id});
+			} else {
+				var holder = $('.grading').find('.grade');
+				grading_temp_value = holder.text();
+				holder.prev('.grade-input').find('input').val(grading_temp_value);
+				holder.prev('.grade-input').find('input').select();
+				grading_temp_value = false;
+			}
+		} else if (!$(e.target).hasClass('grade-input-field')) {
+			var holder = $('.grading').find('.grade-input');
+			var holder_input = holder.find('input');
+			grading_temp_value = holder_input.val();
+
+			if (holder_input.is(':visible') && ($.trim(grading_temp_value) == '' || $.trim(grading_temp_value) == '-')) {
+				holder.next('.grade').html(no_grading_value);
+			} else if (holder_input.is(':visible')) {
+				holder.next('.grade').text(grading_temp_value);
+			}
+
+			holder.next('.grade').show();
+			grading_temp_value = false;
+		}
+	});
+
+	$('.grade-input-field').on('keyup', function (e) {
+		if ($(this).val().trim() == '') {
+			$('.grading-block.adjustment').hide();
+		} else {
+			$('.grading-block.adjustment').show();
+		}
+	});
+}
+
+function load_grading_click_events() {
+	$(document).on('click', function(e) {
+		var el = $(e.target);
+
+		// keep visible part
+		if (el.parents('.grading').length > 0 || el.hasClass('grading')) {
+			$('.grade-wrapper .grading').addClass('keep');
+		} else {
+			$('.grade-wrapper .grading').removeClass('keep');
+			$('.grading .special-values-container').removeClass('clicked');
+			$('.grading .dropDownHolder').hide();
+		}
+
+		// special values part
+		var drop = $('.grading-block .special_values_dropdown');
+
+		if (el.parent().hasClass('special-values-container') && el.parent().hasClass('clicked')) {
+			el.parent().removeClass('clicked');
+			drop.hide();
+		} else if (el.parent().hasClass('special-values-container') && !el.parent().hasClass('clicked')) {
+			$('.grading .dropDownHolder').hide();
+			el.parent().addClass('clicked');
+			drop.show();
+		} else if (!el.parent().hasClass('special-values-container') && drop.is(":visible")) {
+			$('.special-values-container.clicked').removeClass('clicked');
+			drop.hide();
+		}
+	});
+}
+
+function load_grading_grademap_dropdown() {
+	$('.grade-input-field').on('click', function(e) {
+		$('.grading .dropDownHolder').hide();
+
+		var el = $(this);
+		var drop = el.parents('.grading').find('.grading_dropdown');
+
+		if (drop.is(":visible")) {
+			drop.hide();
+		} else if (!drop.is(":visible")) {
+			drop.show();
+		}
+	});
+}
+
+function load_grading_click_event_for_adjustments(options) {
+	$('.grading .plusMinus').on('click', function() {
+		$.facebox({ajax: '/' + options.controller + '/adjustment/' + options.assignment_id + '?student=' + options.student_id})
+	});
+}
+
+function grading_use_grademap(grade, id, student, controller) {
+	var url = '/' + controller + '/submit_score/' + id;
+	var data = {student: student, score: grade, simple: true};
+
+	grading_update_score_post(url, data);
+
+	$('.grading-block.adjustment').show();
+	$('.grading-block.special-mark .to-hide').html('');
+	$('.grading-block .special-values-container i').removeClass().addClass('grading_flag');
+}
+
+var grade_value;
+
+function load_grading_input_events(options) {
+	grade_value = $('.grade-input-field').val();
+
+	$('.grade-input-field').on('focus keypress focusout', function (e) {
+		var score = $('.grade-input-field').val().trim();
+		var data = {student: options.student_id, score: score, simple: true};
+
+		if (score == '') {
+			var action = 'clear_score';
+			$('.grading-block.adjustment i').removeAttr('style');
+		} else {
+			var action = 'submit_score';
+		}
+
+		var url = '/' + options.controller + '/' + action + '/' + options.assignment_id;
+
+		switch (e.type) {
+			case 'focus':
+				$(this).select();
+				break;
+
+			case 'keypress':
+				if (e.which == 13 && grade_value != score) {
+					grading_update_score(url, data, options);
+				}
+				break;
+
+			case 'focusout':
+				if (grade_value != score) {
+					grading_update_score(url, data, options);
+				}
+				break;
+		}
+	});
+}
+
+var grading_max_score_alert_active = false;
+
+function grading_update_score(url, data, options) {
+	if (parseInt(data.score) > options.max_score && !grading_max_score_alert_active) {
+		grading_max_score_alert_active = true;
+
+		$.confirm({
+			content: 'Warning: The score was more than the maximum points. Click OK to accept the value and carry on, or click Cancel to restore the previous value.',
+			confirm: function() {
+				grading_update_score_post(url, data);
+				grading_max_score_alert_active = false;
+			},
+			cancel: function() {
+				if (grade_value) {
+					$('.grade-input-field').val(grade_value);
+				} else {
+					$('.grade-input-field').val('');
+				}
+				grading_max_score_alert_active = false;
+			}
+		});
+	} else if (!grading_max_score_alert_active) {
+		grading_update_score_post(url, data);
+	}
+}
+
+function grading_update_score_post(url, data) {
+	$.ajax({
+		type: 'POST',
+		url: url,
+		data: data,
+		async: false,
+		success: function(response) {
+			if (response.status == 'ok') {
+				grade_value = response.points;
+
+				$('.only-value-wrapper').text(response.points);
+
+				if (response.grademap == true) {
+					$('.full-value-wrapper').text('( ' + response.score + ' )');
+				}
+
+				$('.grade-input-field').val(response.points);
+				$('.grade-wrapper .grading').removeClass('keep');
+				$('.grading .dropDownHolder').hide();
+
+				$('.grading-block.special-mark .to-hide').html('');
+				$('.grading-block .special-values-container i').removeClass().addClass('grading_flag');
+
+				if (response.adjusted == true) {
+					$('.grading-block.adjustment i').css('display','block');
+				} else {
+					$('.grading-block.adjustment i').removeAttr('style');
+				}
+			} else {
+				$.alert({content: response.message});
+			}
+		}
+	});
+}
+
+function grading_special_mark(id, student, controller, score) {
+	var url = '/' + controller + '/submit_score/' + id;
+	var data = {student: student, score: score, simple: true};
+	var text, grade, icon;
+
+	$.post(url, data, function(response) {
+		if (response.status == 'ok') {
+			grade_value = '';
+			reset_rubric();
+
+			switch (score) {
+				case missing:
+					text = response.points;
+					icon = 'grading_missing';
+					grade = '(' + missing + ')';
+					break;
+
+				case incomplete:
+					text = response.points;
+					icon = 'grading_incomplete';
+					grade = '(' + incomplete + ')';
+					break;
+
+				case absent:
+					text = response.points;
+					icon = 'grading_absent';
+					grade = '(' + absent + ')';
+					break;
+
+				case excused:
+					text = '-';
+					icon = 'grading_excused';
+					grade = ''; // why not (X)
+					break;
+			}
+
+			$('.only-value-wrapper').text(text);
+
+			if (response.grademap == true) {
+				$('.full-value-wrapper').text(grade);
+			}
+
+			$('.grade-input-field').val('');
+			$('.grade-wrapper .grading').removeClass('keep');
+			$('.grading .dropDownHolder').hide();
+
+			$('.grading-block.special-mark .to-hide').html('<i class="' + icon + '"></i>');
+			$('.grading-block .special-values-container i').removeClass().addClass(icon);
+			$('.grading-block.adjustment i').removeAttr('style');
+
+			$('.grading-block.adjustment').hide();
+			$('.clear_special_mark').show();
+		} else {
+			$.alert({content: response.message});
+		}
+	});
+}
+
+function grading_clear_special_mark(id, student, controller) {
+	var url = '/' + controller + '/clear_score/' + id;
+	var data = {student: student};
+
+	$.post(url, data, function(response) {
+		if (response.status == 'ok') {
+			reset_rubric();
+
+			if (response.score == '' && response.points == '') {
+				$('.only-value-wrapper').text('');
+				$('.full-value-wrapper').text('');
+				$('.grade-input-field').val('');
+			} else {
+				$('.only-value-wrapper').text(response.points);
+
+				if (response.grademap == true) {
+					$('.full-value-wrapper').text('( ' + response.score + ' )');
+				}
+
+				$('.grade-input-field').val(response.points);
+			}
+
+			$('.grade-wrapper .grading').removeClass('keep');
+			$('.grading .dropDownHolder').hide();
+
+			$('.grading-block.special-mark .to-hide').html('');
+			$('.grading-block .special-values-container i').removeClass().addClass('grading_flag');
+			$('.grading-block.adjustment i').removeAttr('style');
+
+			$('.clear_special_mark').hide();
+		} else {
+			$.alert({content: response.message});
+		}
+	});
+}
+
+function adjustment_form_action(options) {
+	var type = 'save';
+
+	$('#adjustment_form button').on('click', function(e) {
+		type = $(this).attr('name');
+		$('#adjustment_form').submit();
+	});
+
+	$('#adjustment_form').on('submit', function(e) {
+		e.preventDefault();
+
+		var url = '/' + options.controller + '/adjust_' + type + '_score/' + options.id;
+		var data = $('#adjustment_form').serialize() + '&student=' + options.student;
+
+		$.ajax({
+			type: 'POST',
+			url: url,
+			data: data,
+			dataType: 'json',
+			success: function(response) {
+				if (response.status == 'ok') {
+					$('.only-value-wrapper').text(response.points);
+
+					if (response.grademap == true) {
+						$('.full-value-wrapper').text('( ' + response.score + ' )');
+					}
+
+					$('.grade-input-field').val(response.points);
+					$('.grade-wrapper .grading').removeClass('keep');
+					$('.grading .dropDownHolder').hide();
+
+					if (type == 'save') {
+						$('.grading-block.adjustment i').css('display','block');
+					} else if (type == 'reset') {
+						$('.grading-block.adjustment i').removeAttr('style');
+					}
+
+					$.facebox.close();
+				} else {
+					$.alert({content: response.message})
+				}
+			}
+		});
+	});
+}
+
+// grading full screen
+
+function grading_switch_to_full_window() {
+	grading_full_screen = true;
+
+	//$('.nicescroll-rails-vr').removeClass('do_not_hide'); // prevents seeing scrollbar movement lag
+	$('body').addClass('fullscreen');
+	$('body').css('overflow-y', 'auto');
+	$('html').css('background', $('#wrapper').css('background'));
+
+	if ($('#fixedSectionHeader').hasClass('scrolled')) {
+		if (is_mobile_app_mode()) {
+			$('#centreColumn').css('width', globalWindowWidth - 30);
+			$('#fixedSectionHeader').width($('#centreColumn').width());
+		} else {
+			$('#fixedSectionHeader').width($('#centreColumn').width());
+		}
+	}
+
+	$("#contentWrap").addClass('gradebook');
+	$("#contentWrap").removeClass('hasLeftColumn');
+	$("#leftColumn > *").hide();
+	$("#leftColumn").css('width', 30);
+	$("#leftColumn ol.thinMainNav").show();
+	$("footer").hide();
+	$('#full_window_button').hide();
+	$('#regular_window_button').show();
+	resize_grading_fixed_col();
+
+	$.each($('a.grading_arrow, .grading_arrow a'), function(i, el) {
+		$(el).attr('href', updateQueryStringParameter($(el).attr('href'), 'fullscreen', 'true'));
+	});
+}
+
+function grading_switch_to_regular_window() {
+	grading_full_screen = false;
+
+	//$('.nicescroll-rails-vr').removeClass('do_not_hide'); // prevents seeing scrollbar movement lag
+	$('body').removeClass('fullscreen');
+	$('html').css('background', '');
+
+	$("#contentWrap").removeClass('gradebook');
+	$("#contentWrap").addClass('hasLeftColumn');
+	$('#centreColumn').removeAttr('style');
+	$("#leftColumn > *").show();
+	$("#leftColumn").removeAttr('style');
+	$("#leftColumn ol.thinMainNav").show();
+	$("footer").show();
+	$('#regular_window_button').hide();
+	$('#full_window_button').show();
+	if ($('#fixedSectionHeader').hasClass('scrolled')) {
+		$('#fixedSectionHeader').width($('#centreColumn').width());
+	}
+	resize_grading_fixed_col();
+
+	$.each($('a.grading_arrow, .grading_arrow a'), function(i, el) {
+		$(el).attr('href', removeURLParameter($(el).attr('href'), 'fullscreen'));
+	});
+}
+
+// grading floating rubric
+var floating_rubric = $('#grade-floating-rubric');
+
+function floating_rubric_position() {
+		var floating_rubric = $('#grade-floating-rubric');
+		if ($(window).width() > 980) {
+			floating_rubric.css('top', $('#centreColumn').offset().top + 15);
+		} else if ($(window).width() > 768) {
+			floating_rubric.css('top', $('#fixedSectionHeader').offset().top + 15);
+		} else {
+			floating_rubric.css('top', $('#fixedSectionHeader').offset().top + $('.pageHeading').outerHeight() + 15);
+		}
+
+		floating_rubric.css('right', ($(window).width() - ($('.rightColumn .block').offset().left + $('.rightColumn .block').outerWidth()) + 'px'));
+		floating_rubric.css('left', $('.rightColumn .block').offset().left);
+		if (!is_rtl_mode()) {
+			if (!floating_rubric.hasClass('minimized')) {
+				floating_rubric.css('left', $('.leftColumn').offset().left);
+			}
+		} else {
+			if (!floating_rubric.hasClass('minimized')) {
+				floating_rubric.css('right', ($(window).width() - ($('.leftColumn').offset().left + $('.leftColumn').outerWidth()) + 'px'));
+			}
+		}
+
+		var floating_rubric_height = parseInt(floating_rubric.css('top')) + floating_rubric.outerHeight();
+		var bottom_rubric_gap = $(window).height()/6;
+		var max_rubric_height = $(window).height() - bottom_rubric_gap;
+		// check if the rubric is longer than the page
+		if (!floating_rubric.hasClass('minimized') && floating_rubric_height > max_rubric_height) {
+			floating_rubric.css('bottom', bottom_rubric_gap + 'px');
+		}
+}
+
+function hide_visible_tooltip() {
+	$.each(document.querySelectorAll('.tippy-popper'), function(i,popper) {
+		var instance = popper._tippy;
+
+		if (instance.state.visible) {
+			instance.popperInstance.disableEventListeners();
+			instance.hide();
+		}
+	});
+}
+
+function rubric_ellipsis(table_name) {
+	// Hides tooltip while resizing on mobile device / app
+	if (is_mobile_device() || is_mobile_app_mode()) {
+		hide_visible_tooltip();
+	}
+
+	$(table_name + ' .rubric_ellipsis').each(function(index) {
+		if ($(this).find('div').height() > $(this).parent().height()) {
+			// Add tooltip data if the text overflows
+			if ($(this).attr('data-original-title') == null) {
+				$(this).attr('title', $(this).find('div').html());
+				// Change how Tippy is called
+				tippy('.rubric_ellipsis[title]', {
+					placement: 'left',
+					animation: 'fade',
+					arrow: true,
+					popperOptions: {
+						modifiers: {
+							flip: {
+								behavior: ['left', 'top']
+							}
+						}
+					}
+				});
+			}
+			$(this).addClass('fade_out_text');
+		} else {
+			// Remove tooltip data if the text overflows
+			if ($(this).attr('data-original-title') != null) {
+				$(this).removeClass('fade_out_text');
+				$(this)[0]._tippy.destroy();
+				$(this).attr('title', '');
+			}
+		}
+	});
+}
+
+// Hide the tooltips on scroll if visible
+// var allow_page_scroll = true;
+// var IE_version = navigator.appVersion.indexOf('Trident');
+// var is_IE11 = (IE_version > 0) ? true : false; // Will exclude Edge browser
+
+// $(".grading_fixed_col").bind("scroll",function() {
+// 	// Hide the tooltips on scroll if visible
+// 	hide_visible_tooltip();
+// });
+// $(".grading_fixed_col").on("mouseover mouseenter",function(e) {
+// 	// Hide the scroll bar if it's smaller than 30px as this only happens when there is an error
+// 	if ($('.nicescroll-rails-vr > *').height() < 30) {
+// 		$('.nicescroll-rails-vr').removeClass('do_not_hide');
+// 	}
+// 	if (allow_page_scroll) {
+// 		allow_page_scroll = false;
+// 	}
+// });
+// $(".grading_fixed_col").on("mouseleave",function(e) {
+// 	if (!allow_page_scroll) {
+// 		allow_page_scroll = true;
+// 	}
+// });
+/*
+$('body').on('scroll mousewheel touchmove', function(e) {
+	// Only add the scroll prevention on desktop and not in IE11
+	if (!allow_page_scroll && !is_IE11 && !is_mobile_device()) {
+		e.preventDefault();
+		e.stopPropagation();
+		return false;
+	}
+});
+*/
+
+function grading_student_edit_form_submit(timer_format) {
+	$('form#student_edit_form').on('submit', function(e) {
+		e.preventDefault();
+
+		$.ajax({
+			type: 'POST',
+			url: $(this).attr('action'),
+			data: $(this).serialize(),
+			dataType: 'json',
+			success: function(response) {
+				if (response.status == 'ok') {
+					var checkbox = $('#student_edit_form #allow_late');
+					var checkbox_timed = $('#student_edit_form #timed');
+					var dropdown = $('#student_edit_form #max_submissions');
+
+					if ($('.replace_allow_late').length == 1 && checkbox.is(":checked")) {
+						$('.replace_allow_late').html('<span title="Yes"><i class="tick"></i><span class="textOffScreen">Yes</span></span>');
+					} else {
+						$('.replace_allow_late').html('<span title="No"><i class="xCross"></i><span class="textOffScreen">No</span></span>');
+					}
+
+					if ($('.replace_maximum_submissions').length == 1) {
+						$('.replace_maximum_submissions').text((dropdown.val() == 0) ? $(dropdown).find("option:selected").text() : dropdown.val());
+					}
+
+					if ($('.replace_timed').length == 1 && checkbox_timed.is(":checked")) {
+						var minutes = $('#student_edit_form #minutes').val();
+						var seconds = $('#student_edit_form #seconds').val();
+						$('.replace_timed').html(minutes + ':' + seconds + ' (' + timer_format + ')');
+					} else {
+						$('.replace_timed').html('<span title="No"><i class="xCross"></i><span class="textOffScreen">No</span></span>');
+					}
+				} else {
+					$.alert({content: response.message});
+				}
+
+				$.facebox.close();
+			}
+		});
+	});
+}
+
+function load_grading_rubric_icon_click_event(options) {
+	$('.grading .to-show .grading_rubric').on('click', function() {
+		$.facebox({ajax: '/' + options.controller + '/grade_with_rubric/' + options.assignment_id + '?student=' + options.student_id})
+	});
+}
+
+function load_grading_click_event_with_rubric(options) {
+	$('.grade-input input').on('click', function() {
+		$.facebox({ajax: '/' + options.controller + '/grade_with_rubric/' + options.assignment_id + '?student=' + options.student_id})
+	});
+}
+
+$('#grading_rubric_form_right').find('.row > .selected > input:radio').prop('checked', true);
+$('#floating_rubric_form').find('.row > .selected > input:radio').prop('checked', true);
+
+var grading_rubric_form = $('#grading_rubric_form_right'); // doesn't matter which one since it's loaded once on document ready
+var original_form_data = grading_rubric_form.find('input:radio').serializeArray(); // update this on save
+var temporary_form_data; // the dynamic changed array used for comparison
+
+function grading_scale_cell_clicked($elem) {
+	var form_id = $($elem).parents('form').attr('id'); // get the form
+	var row_index = $('#'+form_id).find('.gs-table').find('.row').index($elem.closest('.row'));
+	var row = $($('#'+form_id).find('.gs-table').find('.row')[row_index]);
+	var col_index = row.find('.column').index($elem);
+
+	$($elem).find('input[type="radio"]').prop('checked', true);
+
+	if (form_id == 'floating_rubric_form'){
+		var other_form_id = 'grading_rubric_form_right';
+	} else {
+		var other_form_id = 'floating_rubric_form';
+	}
+
+	var other_row = $($('#'+other_form_id).find('.gs-table').find('.row')[row_index]);
+	var other_col = $(other_row.find('.column')[col_index]);
+	other_row.find('.selected').removeClass('selected');
+	other_col.addClass('selected');
+	other_row.find('.points input').val( other_col.find('input[type="number"]').val() );
+	$(other_col).find('input[type="radio"]').prop('checked', true);
+
+	temporary_form_data = $($elem).parents('form').serializeArray(); // serialize form data in array and store in temp variable
+
+	// compare original(or after save) form data with updated one
+	// if the same doesn't make sense to revert and save
+	if (rubric_same_arrays(original_form_data, temporary_form_data)) {
+		// disable save
+		// disable revert
+		$('[name=revert]').hide();
+		$('a[name=commit]').addClass('disabled');
+		$('button[name=commit]').attr('disabled', 'disabled');
+	} else {
+		// show save
+		// show revert
+		$('[name=revert]').show();
+
+		if (check_if_rubric_is_full(form_id)) {
+			$('a[name=commit]').removeClass('disabled');
+			$('button[name=commit]').removeAttr('disabled');
+		}
+	}
+};
+
+function rubric_grading_form_action(wrapper, wrapper2, target, options) {
+	$('#' + wrapper + ' ' + target).on('click', function(e) {
+		e.preventDefault();
+
+		var name = $(e.target).attr('name');
+		var active = true;
+
+		if (name == 'commit') {
+			var url = '/' + options.controller + '/update_rubric/' + options.id;
+			var data = $('#' + wrapper + ' form').serialize() + '&student=' + options.student;
+
+			if (options.peer != false) {
+				data = data + '&peer=' + options.peer;
+			}
+
+			if ($(e.target).hasClass('disabled') || !check_if_rubric_is_full(wrapper, true)) {
+				active = false;
+			}
+		} else if (name == 'clear') {
+			var url = '/' + options.controller + '/clear_score/' + options.id;
+			var data = {student: options.student};
+
+			if (options.peer != false) {
+				data.peer = options.peer;
+			}
+		} else if (name == 'revert') {
+			$('#' + wrapper + ' input:radio:checked').each(function(){ $(this).attr('checked',false); $(this).parent().removeClass('selected')});
+			$('#' + wrapper2 + ' input:radio:checked').each(function(){ $(this).attr('checked',false); $(this).parent().removeClass('selected')});
+
+			if (original_form_data.length > 0) {
+				$.each(original_form_data, function(k, v) {
+					var f1 = $('#grading_rubric_form_right').find(':radio[name="' + v.name + '"][value=' + v.value + ']');
+					var f2 = $('#floating_rubric_form').find(':radio[name="' + v.name + '"][value=' + v.value + ']');
+
+					f1.parents('.row').find('div.column:not(.title-column)').removeClass('selected');
+					f1.prop('checked', true).parents('.column').addClass('selected');
+
+					f2.parents('.row').find('div.column:not(.title-column)').removeClass('selected');
+					f2.prop('checked', true).parents('.column').addClass('selected');
+				});
+			}
+
+			$('[name=revert]').hide();
+
+			$('a[name=commit]').addClass('disabled');
+			$('button[name=commit]').attr('disabled', 'disabled');
+		}
+
+		if (typeof url != 'undefined' && active == true) {
+			$.ajax({
+				type: 'POST',
+				url: url,
+				data: data,
+				dataType: 'json',
+				//async: false,
+				success: function(response) {
+					if (name == 'commit') {
+						$('.only-value-wrapper').text(response.points);
+
+						if (response.grademap == true) {
+							$('.full-value-wrapper').text('( ' + response.score + ' )');
+						}
+
+						$('.grade-wrapper .grading').removeClass('keep');
+						$('.grading .dropDownHolder').hide();
+						$('.grading-block.special-mark .to-hide').html('');
+						$('.grading-block .special-values-container i').removeClass().addClass('grading_flag');
+						$('.grading-block.adjustment').show();
+
+						$('[name=clear]').show();
+
+						$('#' + wrapper + ' .floatL').show();
+					} else if (name == 'clear') {
+						$('.only-value-wrapper').text('');
+						$('.full-value-wrapper').text('');
+						$('.grading-block.special-mark .to-hide').html('');
+						$('.grading-block.adjustment').hide();
+						$('#' + wrapper + ' .floatL').hide();
+
+						$('[name=clear]').hide();
+
+						$('#' + wrapper + ' input:radio:checked').each(function(){ $(this).attr('checked',false); $(this).parent().removeClass('selected')});
+						$('#' + wrapper2 + ' input:radio:checked').each(function(){ $(this).attr('checked',false); $(this).parent().removeClass('selected')});
+					}
+
+					$('#grade-floating-rubric').removeClass('minimized').removeClass('active').hide();
+
+					$('[name=revert]').hide();
+					$('a[name=commit]').addClass('disabled');
+					$('button[name=commit]').attr('disabled', 'disabled');
+
+					original_form_data = $('#grading_rubric_form_right').find('input:radio').serializeArray();
+				}
+			});
+		}
+	});
+}
+
+function check_if_rubric_is_full(wrapper, alert) {
+	var rgroups = {};
+
+	$('#' + wrapper + ' :radio').each(function(index, el){
+		rgroups[$(el).attr('name')] = 1;
+	});
+
+	if (Object.keys(rgroups).length != $('#' + wrapper + ' :radio:checked').length) {
+		if (alert == true)
+			$.alert({content: 'You need to fill in the entire rubric in order to save it.'});
+		return false;
+	} else {
+		return true;
+	}
+}
+
+function rubric_same_arrays(arr1, arr2) {
+	var same = true;
+
+	if (arr1.length == 0 && arr2.length != 0) {
+		same = false;
+	} else {
+		$.each(arr1, function(k,v) { if (JSON.stringify(v) != JSON.stringify(arr2[k])) { same = false; }});
+	}
+
+	if (arr2.length == 0 && arr1.length != 0) {
+		same = false;
+	} else {
+		$.each(arr2, function(k,v) { if (JSON.stringify(v) != JSON.stringify(arr1[k])) { same = false; }});
+	}
+
+	return same;
+}
+
+function grading_autosave_rubric(el) {
+	var button = $('#grading_rubric_form_right [name=commit]');
+	var comment_btn = $('.grading-thread-comment-options a.save-thread-comment');
+
+	if (is_mobile_device() && document.body.clientWidth < 768) {
+		var editor = $('.grading-thread-comment-textarea textarea');
+		var content = editor.val();
+	} else {
+		var editor = tinyMCE.get($('.grading-thread-comment-textarea #comment').attr('id'));
+		var content = editor.getContent();
+	}
+
+	if (button.length > 0 && check_if_rubric_is_full('grading_rubric_form_right') && !button.hasClass('disabled')) {
+		button.trigger('click');
+	}
+
+	if (content.trim() != '' && (comment_btn.length > 0) && editor.isDirty()) {
+		editor.isNotDirty = 1;
+		comment_btn.trigger('click');
+	}
+
+	window.location.href = $(el).attr('href');
+}
+
+function reset_rubric() {
+	original_form_data = [];
+
+	$('#grading_rubric_form_right input:radio:checked').each(function(){ $(this).attr('checked',false); $(this).parent().removeClass('selected')});
+	$('#floating_rubric_form input:radio:checked').each(function(){ $(this).attr('checked',false); $(this).parent().removeClass('selected')});
+
+	$('a[name=commit]').addClass('disabled');
+	$('button[name=commit]').attr('disabled', 'disabled');
+
+	$('[name=revert]').hide();
+	$('[name=clear]').hide();
+}
+
+// change_student_to_grade
+
+function change_student_to_grade($this, main_key) {
+	var protocol = window.location.protocol;
+	var host = window.location.host;
+	var path = window.location.pathname;
+	var search = window.location.search;
+	var hash = window.location.hash;
+
+	var params = search.replace('?', '').split('&');
+	var query_string = [];
+
+	if (params.length > 0) {
+		$.each(params, function(k, v) {
+			var key = v.split('=')[0];
+			var value = v.split('=')[1];
+
+			if (key != 'fullscreen') {
+				if (key == main_key) {
+					value = $($this).val();
+				}
+
+				query_string.push(key + '=' + value);
+			}
+		});
+
+		query_string.push('fullscreen=' + grading_full_screen)
+		query_string = '?' + query_string.join('&');
+	}
+
+	window.location.href = protocol + '//' + host + path + query_string + hash;
+}
+
+function change_student_to_grade_select2(main_value, main_key) {
+  var protocol = window.location.protocol;
+  var host = window.location.host;
+  var path = window.location.pathname;
+  var search = window.location.search;
+  var hash = window.location.hash;
+
+  var params = search.replace('?', '').split('&');
+  var query_string = [];
+
+  if (params.length > 0) {
+    $.each(params, function(k, v) {
+      var key = v.split('=')[0];
+      var value = v.split('=')[1];
+
+      if (key != 'fullscreen') {
+        if (key == main_key) {
+          value = main_value;
+        }
+
+        query_string.push(key + '=' + value);
+      }
+    });
+
+    query_string.push('fullscreen=' + grading_full_screen)
+    query_string = '?' + query_string.join('&');
+  }
+
+  window.location.href = protocol + '//' + host + path + query_string + hash;
+}
+
+function removeURLParameter(url, parameter) {
+	//prefer to use l.search if you have a location/link object
+	var urlparts = url.split('?');
+
+	if (urlparts.length >= 2) {
+		var prefix = encodeURIComponent(parameter)+'=';
+		var pars = urlparts[1].split(/[&;]/g);
+
+		//reverse iteration as may be destructive
+		for (var i = pars.length; i-- > 0;) {
+			//idiom for string.startsWith
+			if (pars[i].lastIndexOf(prefix, 0) !== -1) {
+				pars.splice(i, 1);
+			}
+		}
+
+		url = urlparts[0] + (pars.length > 0 ? '?' + pars.join('&') : "");
+
+		return url;
+	} else {
+		return url;
+	}
+}
+
+function updateQueryStringParameter(uri, key, value) {
+	var re = new RegExp("([?&])" + key + "=.*?(&|$)", "i");
+	var separator = uri.indexOf('?') !== -1 ? "&" : "?";
+	if (uri.match(re)) {
+		return uri.replace(re, '$1' + key + "=" + value + '$2');
+	}
+	else {
+		return uri + separator + key + "=" + value;
+	}
+}
+
+function prepare_grading_column(controller_name, params_id) {
+	window.grading_right_column = $('.rightColumn');
+	window.grading_left_column = $('.leftColumn');
+	window.grading_resize_handle = $('.column_resize_handle');
+	window.grading_fixed_column = $('.grading_fixed_col');
+	window.floating_rubric  = $('#grade-floating-rubric');
+	$('#fixedMarginTop').addClass("loaded");
+
+	grading_right_column.resizable({
+		handleSelector: ".column_resize_handle",
+		resizeHeight: false,
+		resizeWidthFrom: (is_rtl_mode() ? 'right' : 'left'),
+		onDragEnd: function (e, $el, opt) {
+			on_resize_stop(controller_name, params_id, e, $el, opt);
+
+			if ($('.flowpaper_viewer_wrap').length) {
+				$('.flowpaper_viewer_wrap').resize();
+			}
+		}
+	});
+
+	resize_grading_fixed_col();
+
+	var editor_poll = setInterval(check_editor, 500);
+
+	function check_editor() {
+		if (window.tinyMCE && tinyMCE.activeEditor && tinyMCE.activeEditor.initialized) {
+			resize_grading_fixed_col();
+			$('.mce-tinymce.mce-container.mce-panel').addClass('tinymce_has_loaded');
+			clearInterval(editor_poll);
+		}
+	}
+
+	/*Makes page jump
+	grading_fixed_column.on('mouseenter', function(){
+		window.stop_body_scroll = setTimeout(function(){
+			grading_fixed_column.closest('body').addClass('no-scroll');
+		},500);
+		resize_grading_fixed_col()
+	}).on('mouseleave', function(){
+		clearTimeout(window.stop_body_scroll);
+		grading_fixed_column.closest('body').removeClass('no-scroll');
+		resize_grading_fixed_col()
+	});*/
+
+	$(window).off('resize', window.floating_rubric_resize).on('resize', window.floating_rubric_resize);
+
+	floating_rubric_position();
+
+	// $('table.rubric').on('mouseenter', function() {
+	// 	// Add .do_not_hide on .nicescroll-rails-vr on teacher view if it doesn't exist
+	// 	// Prevents flicker when clicking on the rubric
+	// 	// Don't show the scroll bar if it's smaller than 30px as this only happens when there is an error
+	// 	if (!$('.nicescroll-rails-vr').hasClass('do_not_hide') && !$('#fixedSectionHeader').hasClass('student') && ($('.nicescroll-rails-vr > *').height() > 30)) {
+	// 		setTimeout(function() {
+	// 			$('.nicescroll-rails-vr').addClass('do_not_hide');
+	// 		}, 1000);
+	// 	}
+	// });
+
+// touch screen presses
+	$('.touch #wrapper').on('click', function(e) {
+		// if pressed outside the rubric block
+		if (floating_rubric.has(e.target).length == 0) {
+			if (floating_rubric.hasClass('active') && !floating_rubric.hasClass('minimized')) {
+				floating_rubric.addClass('minimized');
+			}
+		} else if (floating_rubric.hasClass('minimized')) {
+			floating_rubric.removeClass('minimized');
+		}
+	});
+
+	$(".frame-like-input.to-show, .quick_rubric_popup").on('click', function() {
+		$('#grade-floating-rubric').show().addClass('active');
+	});
+
+	$("#grade-floating-rubric .close").on('click', function() {
+		$('#grade-floating-rubric').removeClass('minimized').removeClass('active').hide();
+	});
+
+	$('.no-touch #grade-floating-rubric').on('mouseleave', function() {
+		$(this).addClass('minimized');
+		floating_rubric_position();
+	});
+
+	$('.no-touch #grade-floating-rubric').on('mouseenter', function() {
+		$(this).removeClass('minimized');
+		floating_rubric_position();
+	});
+
+	window.init_niceScroll && init_niceScroll();
+}
+function floating_rubric_resize(){
+	floating_rubric_position();
+	resize_grading_fixed_col();
+
+	// if (!is_mobile_device() && !is_mobile_app_mode()) {
+	// 	$('.nicescroll-rails-vr').removeClass('do_not_hide'); // prevents seeing scrollbar movement lag
+	// }
+}
+
+function resize_grading_fixed_col() {
+	var scroll_gap = (grading_fixed_column.get(0).scrollHeight > Math.round(grading_fixed_column.outerHeight())) ? 0 : 15;//if grading_column has no scrollbar add gap. Math.round for FF
+
+	if (globalWindowWidth <= 1024) {scroll_gap = 15}
+	// Add a width to the fixed content as 100% won't work here
+	grading_fixed_column.css({'width': (grading_right_column.width() - scroll_gap) + 'px'});
+	// Keep fixed handle outside of the right column to prevent shudder during body scrolling in IE11 and Edge
+
+	if (is_rtl_mode()) {
+		grading_resize_handle.css({'left': grading_left_column.offset().left - 19, 'opacity': '1'});
+	} else {
+		grading_resize_handle.css({'left': grading_fixed_column.offset().left, 'opacity': '1'});
+	}
+}
+
+function on_resize_stop(controller, id, e, $el, opt) {
+	$.post('/' + controller + '/resize/' + id, {width: $el.width()});
+	floating_rubric_resize();
+}

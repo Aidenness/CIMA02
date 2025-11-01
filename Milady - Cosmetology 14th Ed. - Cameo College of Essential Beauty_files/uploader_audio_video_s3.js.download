@@ -1,0 +1,55 @@
+function AudioVideoUploader() {
+  this.makeCORSUpload = function (blob, fileName, contentType, sendProcessMessage) {
+    var key = window.s3_uploader_key.replace('${filename}', fileName);
+    var fd = new FormData();
+
+    //fd
+
+    fd.append('key', key);
+    fd.append('acl', window.s3_uploader_acl);
+    fd.append('policy', window.s3_uploader_policy);
+    fd.append('utf8', window.s3_uploader_utf8);
+
+    var use_v4_signature = (window.s3_uploader_use_v4_signature === 'true');
+    if(use_v4_signature) {
+      fd.append('x-amz-algorithm', window.s3_uploader_x_amz_algorithm);
+      fd.append('x-amz-credential', window.s3_uploader_x_amz_credential);
+      fd.append('x-amz-date', window.s3_uploader_x_amz_date);
+      fd.append('x-amz-signature', window.s3_uploader_x_amz_signature);
+    } else {
+      fd.append('AWSAccessKeyId', window.s3_uploader_AWSAccessKeyId);
+      fd.append('signature', window.s3_uploader_signature);
+    }
+
+    fd.append("file",  blob);
+
+    // xhr
+
+    var xhr = createCORSRequest('POST', window.s3_uploader_url);
+    xhr.addEventListener("load", function () {
+      sendProcessMessage(fileName);
+    }, false);
+    xhr.addEventListener("error", function(){console.log('Upload failed');}, false);
+    xhr.addEventListener("abort", function(){console.log('Upload canceled');}, false);
+
+    xhr.send(fd);
+  }
+
+  function createCORSRequest(method, url) {
+    var xhr = new XMLHttpRequest();
+
+    if ("withCredentials" in xhr) {
+      // XHR for Chrome/Firefox/Opera/Safari.
+      xhr.open(method, url, true);
+    } else if (typeof XDomainRequest != "undefined") {
+      // XDomainRequest for IE.
+      xhr = new XDomainRequest();
+      xhr.open(method, url);
+    } else {
+      // CORS not supported.
+      xhr = null;
+    }
+
+    return xhr;
+  }
+}

@@ -1,0 +1,777 @@
+if (window.xhr) {
+    window.tinymce.dom.Event.domLoaded = true;
+}
+
+var globalTinyMCESelector = '';
+var globalTinyMCEDirectionality = '';
+var globalTinyMCEHgt = 0;
+var globalTinyMCELanguageUsed = '';
+
+console.log('[tinymce version: ' + versionForPath + ']');
+
+function delay(callback, ms) {
+    var timer = 0;
+
+    return function () {
+        var context = this,
+            args = arguments;
+
+        clearTimeout(timer);
+
+        timer = setTimeout(function () {
+            callback.apply(context, args);
+        }, ms || 0);
+    };
+}
+
+function tinyMCEenable(selector, directionality, hgt, languageUsed) {
+    // this one disables the load under 768px width
+    // this is supposed to be a mobile check
+    if (document.body.clientWidth < 768) {
+        if (!is_mobile_editor()) {
+            return false;
+        }
+
+        $.loadScript = function (url, callback) {
+            $.ajax({
+                url: url,
+                dataType: 'script',
+                success: callback,
+                async: true
+            });
+        }
+
+        if (!window.mobileTinyLoaded) {
+            $.loadScript('/libraries/tinymce/' + versionForPath + '/js/mobile_tinymce.js', function () {
+                mobiletinyMCEenable(selector, directionality, hgt, languageUsed);
+            });
+        } else {
+            mobiletinyMCEenable(selector, directionality, hgt, languageUsed);
+        }
+
+        // stop loading the rest
+        return false;
+    }
+
+    selector = 'textarea' + selector + '.hasEditor';
+
+    globalTinyMCESelector = selector;
+    globalTinyMCEDirectionality = directionality;
+    globalTinyMCEHgt = hgt;
+    globalTinyMCELanguageUsed = languageUsed;
+
+    console.log(selector);
+
+    switch (languageUsed) {
+        case "us":
+            languageUsed = "en";
+            break;
+        case "gb":
+            languageUsed = "en_GB";
+            break;
+        case "au":
+            languageUsed = "en_AU";
+            break;
+        case "pt":
+            languageUsed = "pt_PT";
+            break;
+        case "in":
+            languageUsed = "hi";
+            break;
+        case "si":
+            languageUsed = "sl";
+            break;
+        case "cn":
+            languageUsed = "en";
+            break;
+        case "zh":
+            languageUsed = "en";
+            break;
+        case "lt":
+            languageUsed = "en";
+            break;
+        case "my":
+            languageUsed = "en";
+            break;
+        case "fa":
+            languageUsed = "en";
+            break;
+        case "lv":
+            languageUsed = "en";
+            break;
+        case "az":
+            languageUsed = "en";
+            break;
+        case "mm":
+            languageUsed = "en";
+            break;
+        case "za":
+            languageUsed = "en";
+            break;
+        case "be":
+            languageUsed = "en";
+            break;
+        case "mt":
+            languageUsed = "en";
+            break;
+        case "ar":
+            languageUsed = "ar";
+            break;
+    }
+
+    tinymce.baseURL = "/libraries/tinymce/" + versionForPath + "/js/tinymce";
+    tinymce.baseURI.directory = "/libraries/tinymce/" + versionForPath + "/js/tinymce";
+    tinymce.baseURI.path = "/libraries/tinymce/" + versionForPath + "/js/tinymce";
+    tinymce.baseURI.relative = "/libraries/tinymce/" + versionForPath + "/js/tinymce";
+    tinymce.suffix = '.min';
+
+    if (NO_P_TAG) {
+        root_block = false;
+    } else {
+        root_block = 'p';
+    }
+
+    if (typeof help_hack_for_tinymce_correct_destroy !== 'undefined') {
+        help_hack_for_tinymce_correct_destroy(selector);
+    }
+
+    var path = window.location && window.location.pathname ? window.location.pathname : '';
+    var isForumSimplified = (typeof window.isForumSimplified !== 'undefined')
+        ? !!window.isForumSimplified
+        : (path.indexOf('/group_forum/') === 0 || path.indexOf('/instructor_forum/') === 0);
+
+    var template_toolbar_items = (templatePlugin == true && !isForumSimplified) ? ' inserttemplate' : '';
+
+    var tinymce_plugins = "advlist lists autolink link visualblocks visualchars media fileupload image imagetools imageupload fileupload cropper";
+    if (!isForumSimplified && templatePlugin == true) {
+        tinymce_plugins = tinymce_plugins + ' inserttemplate savetemplate';
+    }
+
+    var tinymce_toolbar = "bold italic underline removeformat link" + (isForumSimplified ? " bullist numlist" : "");
+
+    if (window.location.pathname == '/portal_editor' || (window.location.pathname.indexOf('banner_editor') > -1)) {
+        tinymce_plugins = tinymce_plugins + ' code';
+        tinymce_toolbar = tinymce_toolbar + ' code';
+    }
+
+    if (!is_visitor_mode()) {
+        tinymce_toolbar = tinymce_toolbar + " fileupload imageupload";
+        if (!isForumSimplified && is_video_recording_mode()) {
+            tinymce_plugins = tinymce_plugins + ' audiorecord';
+            tinymce_plugins = tinymce_plugins + ' videorecord';
+
+            if (!is_mobile_app_mode() && !is_windows_app_mode() && !(window.location.pathname == '/portal_editor' || (window.location.pathname.indexOf('banner_editor') > -1))) {
+                tinymce_toolbar = tinymce_toolbar + ' audiorecord';
+                tinymce_toolbar = tinymce_toolbar + ' videorecord';
+            }
+        }
+    }
+
+    tinymce_toolbar = tinymce_toolbar + template_toolbar_items;
+    var css_content = [
+        'https://fonts.googleapis.com/css?family=Ubuntu:300',
+        'https://fonts.googleapis.com/css?family=Roboto+Slab',
+        'https://fonts.googleapis.com/css?family=Merriweather:300',
+        'https://fonts.googleapis.com/css?family=Titillium+Web:400',
+        'https://fonts.googleapis.com/css?family=Raleway:500',
+        'https://fonts.googleapis.com/css?family=Bitter:400&display=swap',
+        '/stylesheets/editor_new_tiny.css?',
+        portal_stylesheet_url,
+        '/stylesheets/base-colors-user.css',
+        '/stylesheets/editor-colors.css'
+    ];
+
+    if (typeof editor_custom_css !== 'undefined') {
+        css_content.push(editor_custom_css);
+    }
+
+    if (typeof extra_css_content !== 'undefined') {
+        css_content.push(extra_css_content);
+    }
+
+    var font_formats = "Andale Mono=andale mono,monospace;" +
+        "Arial=arial,helvetica,sans-serif;" +
+        "Arial Black=arial black,sans-serif;" +
+        "Bitter='Bitter',serif;" +
+        "Book Antiqua=book antiqua,palatino,serif;" +
+        "Comic Sans MS=comic sans ms,sans-serif;" +
+        "Courier New=courier new,courier,monospace;" +
+        "Georgia=georgia,palatino,serif;" +
+        "Helvetica=helvetica,arial,sans-serif;" +
+        "Impact=impact,sans-serif;" +
+        "Poppins='Poppins',sans-serif;" +
+        "RobotoLightNew='RobotoLightNew',helvetica,arial,sans-serif;" +
+        "Symbol=symbol;" +
+        "Tahoma=tahoma,arial,helvetica,sans-serif;" +
+        "Terminal=terminal,monaco,monospace;" +
+        "Times New Roman=times new roman,times,serif;" +
+        "Trebuchet MS=trebuchet ms,geneva,sans-serif;" +
+        "Verdana=verdana,geneva,sans-serif;" +
+        "Webdings=webdings;" +
+        "Wingdings=wingdings,zapf dingbats";
+
+    if (typeof extra_font_formats !== 'undefined') {
+        font_formats = font_formats + extra_font_formats;
+        font_formats = font_formats.split(';').sort().join(';');
+    }
+
+    var dark_class = (document.documentElement.getAttribute('data-theme') == "dark") ? ' dark_editor' : '';
+
+    var valid_children = (allow_tinymce_styles ? "*[*],+body[style]" : "*[*]")
+
+    tinymce.init({
+        selector: selector,
+        body_class: 'materialStyle' + dark_class,
+        language: languageUsed,
+        directionality: directionality,
+        skin: 'edu20-v6-tiny',
+        cache_suffix: '?d=02.02.24.16.07',
+        icons: 'edu20',
+        branding: false,
+        entity_encoding: "raw",
+        forced_root_block: false, // root_block
+        convert_urls: false,
+        browser_spellcheck: true,
+        paste_remove_styles: false,
+        paste_remove_styles_if_webkit: false,
+        paste_retain_style_properties: "all",
+        inline_styles: true,
+        valid_children: valid_children,
+        valid_elements: "*[*],#p[*]",
+        extended_valid_elements: "a[*]",
+        spellchecker_languages: languageUsed,
+        spellchecker_rpc_url: window.location.protocol + "//" + window.location.host + "/tinymce/spellchecker",
+        plugins: tinymce_plugins,
+        toolbar1: tinymce_toolbar,
+        menubar: false,
+        statusbar: false,
+        height: hgt,
+        min_height: 200,
+        templates: '/content_templates/list',
+        content_css: css_content,
+        contextmenu: (isForumSimplified ? 'link image | cell row column deletetable' : 'link image inserttable | savetemplate | cell row column deletetable'),
+        formats: {
+            alignleft: [{
+                selector: 'figure.image',
+                collapsed: false,
+                classes: 'align-left',
+                ceFalseOverride: true,
+                preview: 'font-family font-size'
+            }, {
+                selector: 'figure,p,h1,h2,h3,h4,h5,h6,td,th,tr,div,ul,ol,li',
+                styles: {
+                    textAlign: 'left'
+                },
+                inherit: false,
+                preview: false,
+                defaultBlock: 'div'
+            }, {
+                selector: 'table',
+                collapsed: false,
+                styles: {
+                    float: 'left'
+                },
+                preview: 'font-family font-size'
+            }, {
+                selector: 'img',
+                collapsed: false,
+                classes: 'img_left',
+                preview: 'font-family font-size'
+            }],
+            aligncenter: [{
+                selector: 'figure,p,h1,h2,h3,h4,h5,h6,td,th,tr,div,ul,ol,li',
+                styles: {
+                    textAlign: 'center'
+                },
+                inherit: false,
+                preview: 'font-family font-size',
+                defaultBlock: 'div'
+            }, {
+                selector: 'figure.image',
+                collapsed: false,
+                classes: 'align-center',
+                ceFalseOverride: true,
+                preview: 'font-family font-size'
+            }, {
+                selector: 'img',
+                collapsed: false,
+                classes: 'img_center',
+                preview: 'font-family font-size'
+            }, {
+                selector: 'table',
+                collapsed: false,
+                styles: {
+                    marginLeft: 'auto',
+                    marginRight: 'auto'
+                },
+                preventDefaultiew: 'font-family font-size'
+            }],
+            alignright: [{
+                selector: 'figure.image',
+                collapsed: false,
+                classes: 'align-right',
+                ceFalseOverride: true,
+                preview: 'font-family font-size'
+            }, {
+                selector: 'figure,p,h1,h2,h3,h4,h5,h6,td,th,tr,div,ul,ol,li',
+                styles: {
+                    textAlign: 'right'
+                },
+                inherit: false,
+                preview: 'font-family font-size',
+                defaultBlock: 'div'
+            }, {
+                selector: 'table',
+                collapsed: false,
+                styles: {
+                    float: 'right'
+                },
+                preview: 'font-family font-size'
+            }, {
+                selector: 'img',
+                collapsed: false,
+                classes: 'img_right',
+                preview: 'font-family font-size'
+            }]
+        },
+        block_formats: "Paragraph=p;Header 1=h1;Header 2=h2;Header 3=h3;Header 4=h4;Header 5=h5;Header 6=h6;Div=div;Address=address;Pre=pre;Code=code",
+        // Visually center images by default in simplified forum contexts
+        content_style: isForumSimplified ? 'img{display:block;margin-left:auto;margin-right:auto;} figure.image{margin-left:auto;margin-right:auto;text-align:center;}' : undefined,
+        style_formats: [{
+            title: 'Paragraph',
+            block: 'p'
+        },
+        {
+            title: 'Header 1',
+            block: 'h1'
+        },
+        {
+            title: 'Header 2',
+            block: 'h2'
+        },
+        {
+            title: 'Header 3',
+            block: 'h3'
+        },
+        {
+            title: 'Header 4',
+            block: 'h4'
+        },
+        {
+            title: 'Header 5',
+            block: 'h5'
+        },
+        {
+            title: 'Header 6',
+            block: 'h6'
+        },
+        {
+            title: 'Div',
+            block: 'div'
+        },
+        {
+            title: 'Address',
+            block: 'address'
+        },
+        {
+            title: 'Pre',
+            block: 'pre'
+        },
+        {
+            title: 'Code',
+            block: 'code'
+        }
+        ],
+        font_formats: font_formats,
+        setup: function (editor) {
+            /* Activity detect inside tinymce */
+
+            if (window.location.pathname == '/portal_editor' || (window.location.pathname.indexOf('banner_editor') > -1)) {
+                var update_panel_timeout = 0;
+
+                editor.on('Change', function (e) {
+                    if (window.location.pathname.indexOf('banner_editor') > -1) {
+                        var id = $('#' + editor.id).parents('[data-slide-id]').data('slide-id');
+                    } else {
+                        var id = $('#' + editor.id).parents('[data-panel-id]').data('panel-id');
+                    }
+
+                    var myiframe = document.getElementById(editor.id + '_ifr');
+                    var html_content = myiframe.contentWindow.document.body.innerHTML;
+                    var content_length = $(myiframe.contentWindow.document.body).text().length;
+
+                    if (myiframe.id.indexOf('panel_split_text_image_') >= 0) {
+                        if (content_length > 700) {
+                            editor.setContent(editor.getContent().substring(0, 700));
+                            content = html_content.substring(0, 700);
+                        } else {
+                            content = html_content;
+                        }
+
+                        $('.options_wrap textarea#' + editor.id + '.hasEditor').val(content);
+
+                        clearTimeout(update_panel_timeout);
+
+                        update_panel_timeout = setTimeout(function () {
+                            editor.isNotDirty = true;
+                            editor.setDirty(true);
+
+                            if (window.location.pathname.indexOf('banner_editor') > -1) {
+                                banner_editor.update_slide(id);
+                            } else {
+                                portal_editor.update_panel(id);
+                            }
+                        }, 750);
+
+                        editor.isNotDirty = true;
+                        editor.setDirty(true);
+                    }
+                });
+
+                editor.on('KeyUp', function (e) {
+                    if (window.location.pathname.indexOf('banner_editor') > -1) {
+                        var id = $('#' + editor.id).parents('[data-slide-id]').data('slide-id');
+                    } else {
+                        var id = $('#' + editor.id).parents('[data-panel-id]').data('panel-id');
+                    }
+
+                    var myiframe = document.getElementById(editor.id + '_ifr');
+                    var html_content = myiframe.contentWindow.document.body.innerHTML;
+                    var content_length = $(myiframe.contentWindow.document.body).text().length;
+
+                    if (myiframe.id.indexOf('panel_split_text_image_') >= 0 && content_length > 700) {
+                        editor.setContent(editor.getContent().substring(0, 700));
+                        content = html_content.substring(0, 700);
+                    } else if (myiframe.id.indexOf('panel_title_') >= 0 && content_length > 121) {
+                        editor.setContent(editor.getContent().substring(0, 130));
+                        content = html_content.substring(0, 121);
+                        content = preserveCarouselH2Tags(content, myiframe.id);
+                    } else if (myiframe.id.indexOf('panel_title_') >= 0) {
+                        // Apply H2 formatting for carousel titles even without length limit
+                        content = preserveCarouselH2Tags(html_content, myiframe.id);
+                    } else if (myiframe.id.indexOf('panel_description_') >= 0 && content_length > 150) {
+                        editor.setContent(editor.getContent().substring(0, 150));
+                        content = html_content.substring(0, 150);
+                    } else {
+                        content = html_content;
+                    }
+
+                    $('.options_wrap textarea#' + editor.id + '.hasEditor').val(content);
+
+                    clearTimeout(update_panel_timeout);
+
+                    update_panel_timeout = setTimeout(function () {
+                        editor.isNotDirty = true;
+                        editor.setDirty(true);
+
+                        if (window.location.pathname.indexOf('banner_editor') > -1) {
+                            banner_editor.update_slide(id);
+                        } else {
+                            portal_editor.update_panel(id);
+                        }
+                    }, 750);
+                });
+            }
+
+            $(selector).data(editor);
+
+            editor.on('Click', function (e) {
+                session_activity_detected();
+            });
+
+            editor.on('KeyPress', function (e) {
+                session_activity_detected();
+            });
+
+            editor.on('MouseMove', function (e) {
+                session_activity_detected();
+            });
+            /* activity detect tinymce END */
+
+            editor.on('BeforeSetContent', function (e) {
+                // Clean content before setting it to prevent empty tag creation
+                if (editor.id.indexOf('panel_title_') >= 0) {
+                    e.content = preserveCarouselH2Tags(e.content, editor.id);
+                }
+            });
+
+            editor.on('SaveContent', function (e) {
+                let html = cleanHTML(e.content);
+                html = preserveCarouselH2Tags(html, editor.id);
+
+                $(e.element).val(html);
+                e.content = html;
+            });
+
+            editor.on("keyup", function (e) {
+                if ((e.keyCode === 13) && (editor.settings.forced_root_block !== "p")) {
+                    editor.execCommand('mceInsertContent', false, "");
+                }
+            });
+
+            editor.on('NodeChange', function (e) {
+                if ($(e.element).is("a")) {
+                    $(".mce-ico.mce-i-unlink").parents(".mce-widget").first().css("display", "inline-block");
+                } else {
+                    $(".mce-ico.mce-i-unlink").parents(".mce-widget").first().hide();
+                }
+            });
+
+            editor.on('init', function (e) {
+                editor.load();
+                
+                // Special handling for carousel titles on initialization
+                if (editor.id.indexOf('panel_title_') >= 0) {
+                    const initialContent = editor.getContent();
+                    const processedContent = preserveCarouselH2Tags(initialContent, editor.id);
+                    if (processedContent !== initialContent) {
+                        editor.setContent(processedContent);
+                    }
+                }
+
+                var toolbar_buttons = $("#" + editor.id).nextAll("div.tox-tinymce").find("button.tox-tbtn");
+                $(toolbar_buttons).each(function (i, el) {
+                    $(el).css('width', '27px');
+                });
+
+                $(".mce-ico.mce-i-unlink").parents(".mce-widget").first().hide();
+
+                if ($(".mce-mathquill-editor").size()) {
+                    $(".mce-mathquill-editor").addClass("mce-widget mce-btn");
+                }
+
+                if ($(editor.getContainer()).parents("#facebox").size() == 0) {
+                    var $links = $("nav a, div.quickLinks a");
+
+                    $links.off("click.stopNormalFlow").on("click.stopNormalFlow", function (e) {
+                        var $elem = $(this);
+
+                        if (editor.isDirty() && !$elem.parents().hasClass('messagesHolder') && !$elem.parent().hasClass('notificationsHolder') && !$elem.attr('aria-haspopup')) {
+                            e.preventDefault();
+                            triggerReloadModal(editor, $links, $elem, false);
+                        }
+                    });
+
+                    $(window).off("keydown.stopNormalFlow").on("keydown.stopNormalFlow", function (e) {
+                        if (e.keyCode == 116) {
+                            if (editor.isDirty()) {
+                                e.preventDefault();
+                                triggerReloadModal(editor, $links, false, e.ctrlKey);
+                            }
+                        }
+                    });
+
+                    $(editor.getWin()).off("keydown.stopNormalFlow").on("keydown.stopNormalFlow", function (e) {
+                        if (e.keyCode == 116) {
+                            if (editor.isDirty()) {
+                                e.preventDefault();
+                                triggerReloadModal(editor, $links, false, e.ctrlKey);
+                            }
+                        }
+                    });
+
+                    $(window).off("beforeunload").on("beforeunload", function (e) {
+                        var version = detectIE();
+                        var msg;
+
+                        if (editor.isDirty()) {
+                            if (version == 11) {
+                                if (editor.getContent().trim() != '') {
+                                    msg = editor.translate("You have unsaved changes are you sure you want to navigate away?");
+                                }
+                            } else {
+                                msg = editor.translate("You have unsaved changes are you sure you want to navigate away?");
+                            }
+                        }
+
+                        return msg;
+                    });
+                }
+
+                if (is_mobile_app_mode()) {
+                    $('.mobileAppOverlay').hide();
+
+                    setTimeout(function () {
+                        var tinymce_iframe = $('.mce-tinymce iframe');
+                        var tinymce_height = $('html', tinymce_iframe.contents()).height() + 38;
+                        $('.mobileAppOverlay').css({
+                            width: $('.mce-container').first().outerWidth(),
+                            height: tinymce_height
+                        });
+                        $('.mobileAppOverlay').show();
+                    }, 1000);
+
+                    $(editor.getWin()).on('keypress', function (e) {
+                        e.preventDefault();
+                        editor.execCommand('mceInsertContent', false, String.fromCharCode(e.keyCode));
+                    });
+                }
+
+                /* disable focus trap on click (accessibility) */
+                window.focusTrap && focusTrap.deactivate();
+            });
+
+            if (navigator.userAgent.match(/iPad/i) != null) { //iPad header fix
+                editor.on('focus', function (e) {
+                    $('header').css({
+                        'position': 'absolute',
+                        'top': 0
+                    });
+                });
+
+                editor.on('blur', function (e) {
+                    $('header').css({
+                        'position': 'fixed',
+                        'top': 0
+                    });
+                });
+            }
+        }
+    });
+}
+
+function cleanHTML(string) {
+    if (string) {
+        string = string.replace('<!DOCTYPE html>', '');
+        string = string.replace(' class="_hovered"', '');
+        
+        // Clean up empty tags that might cause formatting issues
+        string = string.replace(/<p[^>]*>(&nbsp;|\s*)<\/p>/gi, '');
+        string = string.replace(/<h2[^>]*>(&nbsp;|\s*)<\/h2>/gi, '');
+        string = string.replace(/<h2\s+style="[^"]*">(&nbsp;|\s*)<\/h2>/gi, '');
+        string = string.replace(/<div[^>]*>(&nbsp;|\s*)<\/div>/gi, '');
+    }
+
+    return string;
+}
+
+function preserveCarouselH2Tags(content, editorId) {
+    // Only apply to carousel title fields
+    if (editorId && editorId.indexOf('panel_title_') >= 0) {
+        // Handle empty or whitespace-only content
+        if (!content || content.trim() === '' || content.match(/^(<p[^>]*>(&nbsp;|\s*)<\/p>|&nbsp;|\s*)$/i)) {
+            return '';
+        }
+        
+        // Remove any empty paragraphs or h2 tags first (including those with inline styles)
+        content = content.replace(/<p[^>]*>(&nbsp;|\s*)<\/p>/gi, '');
+        content = content.replace(/<h2[^>]*>(&nbsp;|\s*)<\/h2>/gi, '');
+        content = content.replace(/<h2\s+style="[^"]*">(&nbsp;|\s*)<\/h2>/gi, '');
+        
+        // If content became empty after cleaning, return empty
+        if (!content.trim()) {
+            return '';
+        }
+        
+        // If content is wrapped in <p> tags, extract the text and wrap in <h2>
+        if (content.match(/^<p[^>]*>(.*?)<\/p>$/i)) {
+            const textContent = content.replace(/^<p[^>]*>(.*?)<\/p>$/i, '$1').trim();
+            return textContent ? '<h2>' + textContent + '</h2>' : '';
+        }
+        // If already has h2 tags, extract all content and consolidate
+        else if (content.match(/<h2[^>]*>/i)) {
+            // Find all H2 tags and extract their content
+            const h2Matches = content.match(/<h2[^>]*>(.*?)<\/h2>/gi);
+            if (h2Matches) {
+                let allTextContent = '';
+                for (let i = 0; i < h2Matches.length; i++) {
+                    const textMatch = h2Matches[i].match(/<h2[^>]*>(.*?)<\/h2>/i);
+                    if (textMatch && textMatch[1].trim()) {
+                        allTextContent += textMatch[1].trim() + ' ';
+                    }
+                }
+                allTextContent = allTextContent.trim();
+                return allTextContent ? '<h2>' + allTextContent + '</h2>' : '';
+            }
+            return '';
+        }
+        // If no tags at all but has content, wrap in <h2>
+        else if (!content.match(/<[^>]+>/) && content.trim()) {
+            return '<h2>' + content.trim() + '</h2>';
+        }
+        // If has other tags, strip them and wrap content in h2
+        else if (content.match(/<[^>]+>/)) {
+            const textContent = content.replace(/<[^>]*>/g, '').trim();
+            return textContent ? '<h2>' + textContent + '</h2>' : '';
+        }
+    }
+    return content;
+}
+
+function triggerReloadModal(editor, $links, $elem, isCtrl) {
+    editor.windowManager.open({
+        title: close_the_editor_text,
+        file: "/tinymce/close",
+        width: 600,
+        height: 60,
+        buttons: [{
+            text: do_not_close_button_text,
+            onclick: "close",
+            classes: "widget btn primary first abs-layout-item"
+        }, {
+            text: close_text,
+            onclick: function () {
+                editor.windowManager.close();
+                editor.destroy();
+                editor.remove();
+                $links.off("click.stopNormalFlow");
+                $(window).off("keydown.stopNormalFlow").off("beforeunload");
+                $(editor.getWin()).off("keydown.stopNormalFlow");
+
+                if ($elem) {
+                    document.location.href = $elem.attr("href");
+                } else {
+                    location.reload(isCtrl);
+                }
+            },
+            classes: "widget btn primary first abs-layout-item"
+        }]
+    });
+}
+
+/**
+ * detect IE
+ * returns version of IE or false, if browser is not Internet Explorer
+ */
+function detectIE() {
+    var ua = window.navigator.userAgent;
+
+    // Test values; Uncomment to check result …
+
+    // IE 10
+    // ua = 'Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.2; Trident/6.0)';
+
+    // IE 11
+    // ua = 'Mozilla/5.0 (Windows NT 6.3; Trident/7.0; rv:11.0) like Gecko';
+
+    // Edge 12 (Spartan)
+    // ua = 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36 Edge/12.0';
+
+    // Edge 13
+    // ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/46.0.2486.0 Safari/537.36 Edge/13.10586';
+
+    var msie = ua.indexOf('MSIE ');
+
+    if (msie > 0) {
+        // IE 10 or older => return version number
+        return parseInt(ua.substring(msie + 5, ua.indexOf('.', msie)), 10);
+    }
+
+    var trident = ua.indexOf('Trident/');
+
+    if (trident > 0) {
+        // IE 11 => return version number
+        var rv = ua.indexOf('rv:');
+        return parseInt(ua.substring(rv + 3, ua.indexOf('.', rv)), 10);
+    }
+
+    var edge = ua.indexOf('Edge/');
+
+    if (edge > 0) {
+        // Edge (IE 12+) => return version number
+        return parseInt(ua.substring(edge + 5, ua.indexOf('.', edge)), 10);
+    }
+
+    // other browser
+    return false;
+}
